@@ -120,25 +120,23 @@ group by room_id
 having num_of_seat > (select * from avg_num_seat_all_room);
 
 #12 Ngoai nhung seat mà Ong Dung booking duoc o booking id = 1 thi ong CÓ THỂ (CAN) booking duoc nhung seat nao khac khong?
-with seat_booked as(
-select seat_id
-from reserved_seat r
-#join booking b on b.id = r.booking_id
-#join customer c on c.id = b.customer_id
-where booking_id = 1),
+with all_seats as(
+	select seat.id as seat_id
+	from booking b
+		join screening s on s.id = b.screening_id
+		join room r on r.id = s.room_id
+		join seat on r.id = seat.room_id
+	where b.id = 1),
+    
+booked_seat_in_screening1 as(
+	select rs.seat_id
+	from booking b
+		join reserved_seat rs on rs.booking_id = b.id
+	where b.screening_id = (select screening_id from booking where id = 1))
 
-all_seats as(
-select seat.id as seat_id
-from booking b
-join screening s on s.id = b.screening_id
-join room r on r.id = s.room_id
-join seat on r.id = seat.room_id
-where b.id = 1)
-
-select a.seat_id
+select *
 from all_seats a
-left join seat_booked s on a.seat_id = s.seat_id
-where s.seat_id is null;
+where a.seat_id not in (select * from booked_seat_in_screening1);
 
 #13.Show Film with total screening and order by total screening. BUT ONLY SHOW DATA OF FILM WITH TOTAL SCREENING > 10
 select f.name, count(film_id) as total_screening
@@ -161,66 +159,45 @@ from total_booking_table
 where ranking <= 3;
 
 #15.CALCULATE BOOKING rate over screening of each film ORDER BY RATES.
-with total_screening as(
-	select s.film_id, count(s.film_id) as screening_count
-	from screening s
-	group by s.film_id),
-    
-total_booking as(
-	select s.film_id, count(if(b.screening_id is not null, screening_id, null)) as booking_count
-	from booking b
+select f.id, f.name, count(b.id) as total_booking, 
+	count(distinct s.id) as total_screening,
+    count(b.id) / count(distinct s.id) as rate
+from booking b
 	right join screening s on s.id =b.screening_id
-	group by s.film_id),
-
-rating as(
-	select f.name, (b.booking_count/s.screening_count)*100 as rating
-	from total_screening s
-	join total_booking b on b.film_id = s.film_id
-	join film f on f.id = s.film_id
-	order by rating desc)
-select *
-from rating;
+    right join film f on f.id = s.film_id
+group by f.id;
 
 #16.CONTINUE Q15 -> WHICH film has rate over average ?.
-with total_screening as(
-	select s.film_id, count(s.film_id) as screening_count
-	from screening s
-	group by s.film_id),
-    
-total_booking as(
-	select s.film_id, count(if(b.screening_id is not null, screening_id, null)) as booking_count
-	from booking b
+select f.id, f.name, count(b.id) as total_booking, 
+	count(distinct s.id) as total_screening,
+    count(b.id) / count(distinct s.id) as rate
+from booking b
 	right join screening s on s.id =b.screening_id
-	group by s.film_id),
-
-rating as(
-	select f.name, (b.booking_count/s.screening_count)*100 as rating
-	from total_screening s
-	join total_booking b on b.film_id = s.film_id
-	join film f on f.id = s.film_id
-	order by rating desc),
-
-avg_rating_table as(
-	select sum(rating) / count(name) as avg_rating
-	from rating)
-
-select name
-from rating
-where rating > (select avg_rating from avg_rating_table);
+    right join film f on f.id = s.film_id
+group by f.id
+having rate > (select count(b.id) / count(distinct s.id) as avg_rate
+				from booking b
+					right join screening s on s.id =b.screening_id
+					right join film f on f.id = s.film_id);
 
 #17.TOP 2 people who enjoy the least TIME (in minutes) in the cinema based on booking info - only count who has booking info (example : Dũng book film tom&jerry 4 times -> Dũng enjoy 90 mins x 4)
-with ranking as(
-	select c.first_name, sum(f.length_min) as total_time,
+select *
+from(
+select c.id, concat(c.first_name, ' ', c.last_name) as customer_name,
+		f.length_min,
 		dense_rank() over(order by sum(f.length_min)) as ranking
-	from booking b
+from booking b
 	join screening s on s.id = b.screening_id
 	join film f on f.id = s.film_id
 	join customer c on c.id = b.customer_id
-	group by c.id)
-
-select first_name
-from ranking 
+group by c.id, screening_id) as ranked_customer
 where ranking <= 2
+
+# if a customer has more than 2 bookings with same screening 
+# after previous query, group by customer_name and sum(length_min)
+
+
+
 
 
 
