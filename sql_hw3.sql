@@ -14,6 +14,11 @@ group by name
 order by name
 
 #3. SqlBuses
-select
+select b.id, count (p.id) as passengers_on_board
 from buses b
-    join passengers p on b.origin = p.origin
+    left join passengers p on b.origin = p.origin 
+                    and b.destination = p.destination
+                    and p.time <= b.time
+group by b.id
+order by b.id
+
